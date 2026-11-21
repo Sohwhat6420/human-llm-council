@@ -4,14 +4,14 @@
 reaches you: the made-up claims, the hallucinations and the subpar results.**
 
 [![test](https://github.com/Sohwhat6420/human-llm-council/actions/workflows/test.yml/badge.svg)](https://github.com/Sohwhat6420/human-llm-council/actions/workflows/test.yml)
-[![Status: preview](https://img.shields.io/badge/status-preview-orange)](#what-exists-today)
+[![Version 1.0.0](https://img.shields.io/badge/version-1.0.0-2f6f66)](CHANGELOG.md)
 [![Licence: Apache-2.0](https://img.shields.io/badge/licence-Apache--2.0-blue)](LICENSE)
 
 > [!NOTE]
-> **This is a preview**, not a working product. What exists today is a benchmark,
-> which is a fixed test: 1,887 real questions that AI agents asked me, with the answer I chose each time. It has
-> been run against untrained models. No model has been trained on my data yet, and there is nothing to install.
-> [What exists today](#what-exists-today) lists every part.
+> **Version 1.0.0 is the toolkit, not a trained council.** You can install it and run every step on your own
+> history: the benchmark, which is a fixed test (for me, 1,887 real questions that AI agents asked me, with the
+> answer I chose each time), the privacy steps, the scoring and the training script. No model has been trained on
+> my data yet, so none ships with it. [What exists today](#what-exists-today) lists every part.
 
 ## What it is for
 
@@ -87,7 +87,8 @@ about an hour, and only if I approve uploading the cleaned training files, with 
 
 ## What exists today
 
-Status on 11 November 2026.
+Status on 11 November 2026. The three rows about installing, planted instructions and `council ask` are new in
+version 1.0.0.
 
 | Part | State | Evidence |
 | --- | --- | --- |
@@ -97,6 +98,9 @@ Status on 11 November 2026.
 | Laptop training test | **Run on made-up data only.** A 1.7-billion-parameter Qwen3 was trained on a laptop graphics card (RTX 3060, 6 GB): 27.5 minutes of training, using 3.34 GB of graphics memory at most. A memorisation check planted 5 marker rows in the training data, and the trained model gave away none of them. The same check caught all 5 when a small model was trained to memorise them on purpose, which shows the check works. Method: QLoRA, which trains a small add-on on top of the shrunk model. | [`build/train/`](build/train/) |
 | Scrutiniser trained on my real data | **Not started.** It waits for my own approval of the cleaned training files. | |
 | Checking how consistent I am | Tool **built**: a local web page that asks me 40 of the test questions again, to measure how often I agree with myself. Not taken yet. | [`build/retest/`](build/retest/) |
+| Installing it and running it yourself | **Built and tested** on Python 3.10 to 3.13: one install command, a `council` command for every step, and `council demo`, which runs every step on made-up transcripts. | [Install and run](#install-and-run) |
+| Protection against planted instructions | **Built and tested.** Questions copied from transcripts are walled off from the model's instructions, so a question cannot pose as one, and the model must run on the same computer. The untrained scores above were measured with the earlier wording, which is kept unchanged so they can be checked. | [SECURITY.md](SECURITY.md) |
+| Suggesting an answer to an agent's question (`council ask`) | **Built.** It shows the agent's question with the council's pick marked, and I decide. It uses an untrained model until a trained one passes the pass mark, so for now its pick is only a weak hint. | [`build/council_eval/ask.py`](build/council_eval/ask.py) |
 | Designer, Coder, Orchestrator | Design only. | |
 | Nightly update | Design only. | |
 | Answering agents' questions for me | Design only. I will always see the agent's question with the council's answer filled in, and I can change it. It never answers behind my back. | [docs/PRIOR-ART.md](docs/PRIOR-ART.md) |
@@ -107,13 +111,15 @@ Status on 11 November 2026.
 
 | Path | What it is |
 | --- | --- |
-| [`build/council_eval/`](build/council_eval/) | The benchmark code, in plain Python with no extra packages. It reads agent decisions from local transcripts, strips private details, splits them by time and locks the test, builds the blind, shuffled questions, runs the simple comparison rules and a local model, scores them against pass marks fixed in advance, and prepares the training files, the review sheet and the signed approval. |
+| [`build/council_eval/`](build/council_eval/) | The `council` command and the benchmark code, in plain Python with no extra packages. It reads agent decisions from local transcripts, strips private details, splits them by time and locks the test, builds the blind, shuffled questions, runs the simple comparison rules and a local model, scores them against pass marks fixed in advance, and prepares the training files, the review sheet and the signed approval. Also `council demo` and `council ask`. |
 | [`build/train/`](build/train/) | The training script. It refuses to run without a valid approval and throws away any result that gives away a planted marker row. Also the run that proves the memorisation check works, and a row-length check. |
-| [`build/tests/`](build/tests/) | 21 pytest tests on made-up transcripts. |
+| [`build/tests/`](build/tests/) | 53 pytest tests on made-up transcripts, including every step end to end and the planted-instruction cases. |
 | [`build/retest/`](build/retest/) | The consistency retest: a web page that only this computer can reach, and its scorer, with 14 tests and a smoke test on made-up data. |
 | [`docs/BENCHMARK.md`](docs/BENCHMARK.md) | The benchmark in more detail, and the pass mark. |
 | [`docs/PRIVACY-PIPELINE.md`](docs/PRIVACY-PIPELINE.md) | The privacy design: hard rules, the steps, consent. |
 | [`docs/PRIOR-ART.md`](docs/PRIOR-ART.md) | Prior art and the defensive publication. |
+| [`SECURITY.md`](SECURITY.md) | How to report a security problem, and how each of OWASP's top ten risks for LLM applications is handled. |
+| [`CHANGELOG.md`](CHANGELOG.md) | What changed in each version. |
 
 </details>
 
@@ -137,26 +143,47 @@ that.
 
 More detail, and the pass mark, are in [docs/BENCHMARK.md](docs/BENCHMARK.md).
 
-## Run the tests
+## Install and run
 
-There is no model to install yet. What you can run is the test suite. It uses made-up transcripts and needs none
-of your data. You need Python 3, and Node 18 or later for the retest tool's tests. If your system only has
+You need Python 3.10 or later. The code uses no extra packages, so the install only adds `pytest` for the tests.
+Everything in this section runs on made-up transcripts and needs none of your data. If your system only has
 `python3`, use that in place of `python`.
 
 ```bash
-git clone https://github.com/Sohwhat6420/human-llm-council && cd human-llm-council/build
+git clone https://github.com/Sohwhat6420/human-llm-council && cd human-llm-council
 ```
 
 ```bash
-python -m pip install pytest && python -m pytest -q tests
+python -m venv .venv && source .venv/bin/activate
+```
+
+On Windows PowerShell, activate it with `.venv\Scripts\Activate.ps1` instead.
+
+```bash
+python -m pip install -e ".[test]"
+```
+
+```bash
+council demo
+```
+
+The demo reads made-up Claude Code transcripts, removes the planted contact details, replaces a planted name,
+drops a question about minors, splits the questions by time, scores the simple rules with the options shuffled
+and the agent's hint hidden, builds the training files with planted marker rows, walks through the signed
+approval, and shows the pass mark failing a rule that just copies the agent. It takes about a second.
+
+Then the tests. The retest tool's tests need Node 20 or later.
+
+```bash
+python -m pytest
 ```
 
 ```console
-21 passed
+53 passed
 ```
 
 ```bash
-node --test retest/test/retest.test.mjs
+node --test build/retest/test/retest.test.mjs
 ```
 
 ```console
@@ -164,6 +191,46 @@ node --test retest/test/retest.test.mjs
 # pass 14
 # fail 0
 ```
+
+`council` on its own lists every command, and `council <command> --help` explains one.
+
+## Use it on your own history
+
+Everything stays on your computer. Your data, settings and results go in `build/data/`, `build/local/` and
+`build/results/`, which git ignores. Set `COUNCIL_HOME` to keep them somewhere else.
+
+1. **Say who you are** (optional). Create the folder `build/local/` and put `{"owner": "Sam"}` in
+   `build/local/council.json`. List the people who appear in your sessions in `build/local/aliases.json` as
+   `{"Their name": "PEER"}` (roles: PEER, AUTHORITY, FAMILY, PARTNER, OTHER), and anything else to drop in
+   `build/local/exclusions.json` ([the privacy design](docs/PRIVACY-PIPELINE.md#what-the-owner-configures-locally-never-committed)).
+2. **Build your benchmark** from your Claude Code transcripts in `~/.claude/projects`. Only counts are printed.
+   ```bash
+   council ingest
+   council split
+   council eval --arms recommended,first,random --shuffle
+   ```
+3. **Score a model on your own computer** with [Ollama](https://ollama.com) (`ollama pull qwen3:4b`). The code
+   refuses to send your questions to a model anywhere else.
+   ```bash
+   council eval --arms llm --model qwen3:4b --shuffle
+   ```
+4. **Build the training files, read the review sheet, then approve it** in your own words. Rebuilding any file
+   afterwards cancels the approval.
+   ```bash
+   council sft
+   council review
+   council review --approve "I read the sheet on <date>; nothing private survived"
+   ```
+5. **Train** on a graphics card (`python -m pip install -e ".[train]"`, after installing the right `torch` for
+   your card), then check the result against the pass mark using your untrained model's result file.
+   ```bash
+   council train --data build/data --base Qwen/Qwen3-1.7B --qlora --out build/local/adapter-v1 --baseline build/results/<untrained model's file>.json
+   ```
+6. **Ask the council** about a question an agent is asking you, saved as `{"question": "...", "options": ["...", "..."]}`.
+   It prints the question with its pick marked, and you decide.
+   ```bash
+   council ask question.json --model qwen3:4b
+   ```
 
 ## Security and privacy
 
@@ -178,11 +245,14 @@ node --test retest/test/retest.test.mjs
   marker rows planted in the training data, and a control run proves the check can catch a leak.
 - Transcripts are treated as untrusted text, because someone could plant instructions in them (prompt injection,
   the first risk on OWASP's top ten for LLM applications). The code reads them as data and never follows or runs
-  anything in them. The retest page can only be reached from the same computer.
+  anything in them. When a question goes to a model, it is walled off from the model's instructions so it cannot
+  pose as one, the model can only pick one of the offered options, and the model must run on the same computer.
+  The retest page can only be reached from the same computer. How each of the ten risks is handled is in
+  [SECURITY.md](SECURITY.md).
 
 Not in this repository, by design: any data, transcript, export, training file, review sheet, trained add-on or
-model weights; the research notes; and every name other than mine. The code reads its private settings (the name
-table, the secret key, extra exclusions) from `build/local/`, which git ignores. The privacy design is in
+model weights; the research notes; and every name other than mine. The code reads its private settings (the
+owner's name, the name table, the secret key, extra exclusions) from `build/local/`, which git ignores. The privacy design is in
 [docs/PRIVACY-PIPELINE.md](docs/PRIVACY-PIPELINE.md).
 
 ## Prior art / defensive publication (11 November 2026)
