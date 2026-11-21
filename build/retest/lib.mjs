@@ -175,12 +175,15 @@ export function clientView(item) {
 
 // ---------- responses and scoring ----------
 
-export function validateResponse(body, itemIds) {
+// optionCounts (optional): item id -> number of options shown, so answer_idx is checked against the item.
+export function validateResponse(body, itemIds, optionCounts) {
   if (!body || typeof body !== "object") return "body must be an object";
   if (typeof body.item_id !== "string" || !itemIds.has(body.item_id)) return "unknown item_id";
   if (body.skipped !== true) {
     const isOther = body.answer_kind === "other";
     if (!isOther && !Number.isInteger(body.answer_idx)) return "answer_idx must be an integer unless skipped or other";
+    const n = optionCounts && optionCounts.get(body.item_id);
+    if (!isOther && (body.answer_idx < 0 || (Number.isInteger(n) && body.answer_idx >= n))) return "answer_idx is not one of this item's options";
     if (isOther && typeof body.answer_text !== "string") return "other needs answer_text";
     if (!(Number.isInteger(body.confidence) && body.confidence >= 1 && body.confidence <= 5)) return "confidence must be 1..5";
   }

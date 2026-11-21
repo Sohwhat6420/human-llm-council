@@ -119,6 +119,10 @@ test("validateResponse accepts options, other and skips; rejects junk", () => {
   assert.ok(validateResponse({ item_id: "a", answer_idx: 0, confidence: 9 }, ids));
   assert.ok(validateResponse({ item_id: "a", answer_idx: "0", confidence: 2 }, ids));
   assert.ok(validateResponse({ item_id: "a", answer_idx: 0, confidence: 2, events: "no" }, ids));
+  const counts = new Map([["a", 3]]);
+  assert.equal(validateResponse({ item_id: "a", answer_idx: 2, confidence: 3 }, ids, counts), null);
+  assert.ok(validateResponse({ item_id: "a", answer_idx: 3, confidence: 3 }, ids, counts));
+  assert.ok(validateResponse({ item_id: "a", answer_idx: -1, confidence: 3 }, ids));
 });
 
 test("latestResponses: the last record per item wins", () => {
@@ -195,6 +199,21 @@ test("server: items are blind, saves append, state resumes, partial restores, ho
       rq.end();
     });
     assert.equal(status, 403);
+
+    // cross-site writes (OWASP LLM04: a web page must not be able to add answers)
+    const before = readFileSync(app.files.responsesFile, "utf8");
+    const save = { item_id: id0, answer_kind: "option", answer_idx: 0, confidence: 4 };
+    r = await fetch(base + "/api/save", { method: "POST", headers: { "content-type": "text/plain" }, body: JSON.stringify(save) });
+    assert.equal(r.status, 403, "a text/plain simple request is refused");
+    r = await fetch(base + "/api/save", { method: "POST", headers: { "content-type": "application/json", origin: "https://evil.example" }, body: JSON.stringify(save) });
+    assert.equal(r.status, 403, "a foreign Origin is refused");
+    r = await fetch(base + "/api/partial", { method: "POST", headers: { "content-type": "application/json", "sec-fetch-site": "cross-site" }, body: JSON.stringify(save) });
+    assert.equal(r.status, 403, "Sec-Fetch-Site cross-site is refused");
+    r = await fetch(base + "/api/save", { method: "POST", headers: { "content-type": "application/json", origin: base }, body: JSON.stringify(save) });
+    assert.equal(r.status, 200, "the page's own origin is accepted");
+    r = await fetch(base + "/api/save", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...save, answer_idx: 99 }) });
+    assert.equal(r.status, 400, "an option index the item does not have is refused");
+    assert.equal(readFileSync(app.files.responsesFile, "utf8").split("\n").length, before.split("\n").length + 1);
   } finally {
     app.server.close();
     rmSync(dir, { recursive: true, force: true });
