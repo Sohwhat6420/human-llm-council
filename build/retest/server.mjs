@@ -36,6 +36,7 @@ export function createApp({ dataDir = DEFAULT_DATA_DIR, source = DEFAULT_SOURCE,
   const meta = built.meta;
   const itemIds = new Set(items.map((it) => it.id));
   const views = items.map(clientView);
+  const optionCounts = new Map(views.map((v) => [v.id, Array.isArray(v.options) ? v.options.length : undefined]));
 
   function readResponses() {
     return existsSync(responsesFile) ? readJsonl(responsesFile) : [];
@@ -85,8 +86,26 @@ export function createApp({ dataDir = DEFAULT_DATA_DIR, source = DEFAULT_SOURCE,
     return /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/.test(h);
   }
 
+  // Writes only from this page. The Host check stops DNS rebinding, but any web page open in the same browser can
+  // still POST a text/plain "simple" request to 127.0.0.1 and poison the answers (the training and eval data,
+  // OWASP LLM04). JSON content type forces a CORS preflight, which this server never answers; Origin and
+  // Sec-Fetch-Site, when the browser sends them, must say same origin.
+  function writeOk(req) {
+    const ct = String(req.headers["content-type"] || "").toLowerCase();
+    if (!/^application\/json\s*(;|$)/.test(ct)) return "content-type must be application/json";
+    const origin = req.headers.origin;
+    if (origin !== undefined && origin !== `http://${String(req.headers.host || "").toLowerCase()}`) return "cross-origin write refused";
+    const site = req.headers["sec-fetch-site"];
+    if (site !== undefined && site !== "same-origin" && site !== "none") return "cross-site write refused";
+    return null;
+  }
+
   async function handle(req, res) {
     if (!hostOk(req)) return json(res, 403, { error: "forbidden host" });
+    if (req.method === "POST") {
+      const bad = writeOk(req);
+      if (bad) return json(res, 403, { error: bad });
+    }
     const url = new URL(req.url, "http://127.0.0.1");
     const p = url.pathname;
     try {
@@ -111,7 +130,7 @@ export function createApp({ dataDir = DEFAULT_DATA_DIR, source = DEFAULT_SOURCE,
         } catch {
           return json(res, 400, { error: "invalid json" });
         }
-        const err = validateResponse(body, itemIds);
+        const err = validateResponse(body, itemIds, optionCounts);
         if (err) return json(res, 400, { error: err });
         body.server_received_at = new Date().toISOString();
         appendFileSync(responsesFile, JSON.stringify(body) + "\n", "utf8");
